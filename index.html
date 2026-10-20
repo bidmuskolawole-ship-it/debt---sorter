@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en-GB"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d7a5c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Debt Sorter">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Debt Sorter</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: summary strip on top, debts list left, payoff plan (extra hours + chart) right; stacks on phones */
+:root{
+  --bg:#eef2f0; --surface:#fbfcfb; --ink:#13211c; --muted:#5b6b64; --line:#d5dfda;
+  --accent:#0d7a5c; --accent-ink:#ffffff; --accent-soft:#d9efe7;
+  --warn:#b45309; --warn-soft:#fdebd0; --bad:#b42318; --bad-soft:#fde4e1;
+  --track:#dde6e1;
+  --display:"Bricolage Grotesque","Hanken Grotesk",system-ui,sans-serif;
+  --body:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1512; --surface:#16201c; --ink:#e6f0eb; --muted:#93a59c; --line:#27352f;
+    --accent:#3fcf9f; --accent-ink:#06231a; --accent-soft:#17382d;
+    --warn:#f0a553; --warn-soft:#3a2a12; --bad:#ff8a7d; --bad-soft:#3d1a16; --track:#243029;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1512; --surface:#16201c; --ink:#e6f0eb; --muted:#93a59c; --line:#27352f;
+  --accent:#3fcf9f; --accent-ink:#06231a; --accent-soft:#17382d;
+  --warn:#f0a553; --warn-soft:#3a2a12; --bad:#ff8a7d; --bad-soft:#3d1a16; --track:#243029;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;
+  padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:clamp(28px,5vw,40px);font-weight:800}
+h2{font-size:20px;font-weight:800}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+header{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:end;justify-content:space-between}
+header p{margin:4px 0 0;color:var(--muted);max-width:52ch}
+.status{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.btn{border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn.danger{color:var(--bad)}
+.btn.danger.armed{background:var(--bad);border-color:var(--bad);color:#fff}
+
+.summary{display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.summary>div{padding:16px 18px;min-width:0}
+.summary>div+div{border-left:1px solid var(--line)}
+.label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.big{font-family:var(--mono);font-size:clamp(20px,3.4vw,28px);font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.sub{font-size:13px;color:var(--muted);margin-top:2px}
+.banner{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;background:var(--warn-soft);color:var(--ink);border-radius:10px;padding:10px 14px;font-size:14px}
+
+.cols{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.debts{display:flex;flex-direction:column;gap:12px}
+.debt{border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.debt-top{display:flex;justify-content:space-between;gap:10px;align-items:start;flex-wrap:wrap}
+.debt-name{font-family:var(--display);font-weight:800;font-size:18px;overflow-wrap:anywhere}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.chip{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--accent-soft);color:var(--ink);font-weight:600}
+.chip.ex{background:var(--warn-soft)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.owed{font-family:var(--mono);font-size:22px;font-weight:600;text-align:right}
+.bar{height:8px;background:var(--track);border-radius:99px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px 14px;margin:0}
+.facts div{min-width:0}
+.facts dt{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.facts dd{margin:1px 0 0;font-weight:500;overflow-wrap:anywhere}
+.row-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.logbox{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--accent-soft);padding:8px 10px;border-radius:8px}
+.empty{padding:26px 10px;text-align:center;color:var(--muted)}
+
+form.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;border:1px dashed var(--accent);border-radius:10px;padding:14px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field.full{grid-column:1/-1}
+.field label{font-size:12px;font-weight:600;color:var(--muted)}
+.field small{color:var(--muted);font-size:12px}
+input[type=text],input[type=number],select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);min-height:38px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.form-actions{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}
+
+.plan-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hours{display:flex;flex-direction:column;gap:6px}
+.hours-val{font-family:var(--mono);font-size:26px;font-weight:600}
+.result{background:var(--accent-soft);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:6px}
+.result strong{font-family:var(--mono)}
+.check{display:flex;gap:8px;align-items:center;font-size:14px}
+.chart{width:100%;height:auto;display:block}
+.chart text{fill:var(--muted);font-family:var(--mono);font-size:11px}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .base{stroke:var(--muted);stroke-width:2;stroke-dasharray:5 4;fill:none}
+.chart .plan{stroke:var(--accent);stroke-width:2.5;fill:none}
+.chart .area{fill:var(--accent-soft)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:18px;height:0;border-top:3px solid var(--accent);vertical-align:middle;margin-right:6px}
+.legend span.b::before{border-top:2px dashed var(--muted)}
+.note{font-size:13px;color:var(--muted);margin:0}
+
+@media (max-width:860px){
+  .cols{grid-template-columns:minmax(0,1fr)}
+  .summary{grid-template-columns:repeat(2,1fr)}
+  .summary>div:nth-child(3){border-left:0}
+  .summary>div:nth-child(n+3){border-top:1px solid var(--line)}
+}
+@media (max-width:520px){
+  form.grid,.plan-grid{grid-template-columns:minmax(0,1fr)}
+  .owed{text-align:left}
+}
+@media (prefers-reduced-motion:no-preference){.bar>i{transition:width .4s ease}}
+</style>
+</head><body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Debt Sorter</h1>
+      <p>Put in what you owe, how you will pay it back and how much. Add extra hours at work to see how much sooner you are free.</p>
+    </div>
+    <div class="status" id="status" role="status"></div>
+  </header>
+
+  <section class="summary" id="summary" aria-label="Summary"></section>
+  <div id="banner"></div>
+
+  <div class="cols">
+    <section class="panel" aria-labelledby="dh">
+      <div class="panel-head">
+        <h2 id="dh">What I owe</h2>
+        <button class="btn primary" id="add-btn" type="button">Add a debt or bill</button>
+      </div>
+      <form class="grid" id="form" hidden>
+        <div class="field full"><label for="f-name">Who or what do you owe?</label><input type="text" id="f-name" required placeholder="e.g. Barclaycard, phone bill, Tunde"></div>
+        <div class="field"><label for="f-kind">Type</label>
+          <select id="f-kind"><option>Credit card</option><option>Loan</option><option>Overdraft</option><option>Bill or arrears</option><option>Buy now pay later</option><option>Owed to a person</option><option>Other</option></select></div>
+        <div class="field"><label for="f-owed">Owed now (£)</label><input type="number" id="f-owed" min="0" step="0.01" inputmode="decimal" required></div>
+        <div class="field"><label for="f-pay">I will pay each month (£)</label><input type="number" id="f-pay" min="0" step="0.01" inputmode="decimal" required></div>
+        <div class="field"><label for="f-due">Due on day of month</label><input type="number" id="f-due" min="1" max="31" step="1" inputmode="numeric" placeholder="e.g. 14"></div>
+        <div class="field"><label for="f-method">How I will pay it back</label><input type="text" id="f-method" list="methods" placeholder="Direct debit, bank transfer..."><datalist id="methods"><option>Direct debit</option><option>Standing order</option><option>Bank transfer</option><option>Card payment</option><option>Cash</option></datalist></div>
+        <div class="field"><label for="f-apr">Interest rate APR % <small>(optional)</small></label><input type="number" id="f-apr" min="0" step="0.1" inputmode="decimal" placeholder="0"></div>
+        <div class="field"><label for="f-start">Original amount (£) <small>(optional, for progress)</small></label><input type="number" id="f-start" min="0" step="0.01" inputmode="decimal"></div>
+        <div class="field full"><label for="f-note">Note <small>(optional)</small></label><input type="text" id="f-note" placeholder="Account reference, who to message, anything useful"></div>
+        <div class="form-actions"><button class="btn primary" type="submit" id="f-save">Save</button><button class="btn" type="button" id="f-cancel">Cancel</button></div>
+      </form>
+      <div class="debts" id="debts"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="ph">
+      <h2 id="ph">Payoff plan</h2>
+      <div class="plan-grid">
+        <div class="field"><label for="s-strategy">Extra money goes to</label>
+          <select id="s-strategy"><option value="avalanche">Highest interest first</option><option value="snowball">Smallest debt first</option></select></div>
+        <div class="field"><label for="s-rate">My pay per hour after tax (£)</label><input type="number" id="s-rate" min="0" step="0.01" inputmode="decimal"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="s-roll"> When a debt is cleared, move its payment to the next one</label>
+      <div class="hours">
+        <label class="label" for="s-hours">Extra hours per week (optional)</label>
+        <div class="hours-val"><span id="hours-out">0</span> hrs</div>
+        <input type="range" id="s-hours" min="0" max="30" step="0.5" value="0">
+      </div>
+      <div class="result" id="result"></div>
+      <div>
+        <svg class="chart" id="chart" viewBox="0 0 600 230" role="img" aria-label="Total owed over time"></svg>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="field"><label for="s-target">Want to be debt free in (months)? <small>optional</small></label><input type="number" id="s-target" min="1" max="120" step="1" inputmode="numeric" placeholder="e.g. 12"></div>
+      <p class="note" id="target-out"></p>
+      <p class="note">Figures are estimates. Interest is worked out monthly from the rate you enter and your pay is assumed to stay the same.</p>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  var KEY="debt-sorter-v1";
+  var $=function(id){return document.getElementById(id)};
+  var state=null, ui={editing:null,logging:null,arming:null}, saveTimer=null, dbDoc=null, dbBusy=false, dbDirty=false;
+
+  function uid(){return "d"+Math.random().toString(36).slice(2,9)}
+  function sample(){
+    return {settings:{rate:12,hours:0,strategy:"avalanche",roll:true,target:""},debts:[
+      {id:uid(),ex:1,name:"Credit card",kind:"Credit card",owed:640,start:900,apr:24.9,pay:60,due:14,method:"Direct debit",note:""},
+      {id:uid(),ex:1,name:"Phone and BNPL",kind:"Buy now pay later",owed:180,start:300,apr:0,pay:45,due:1,method:"Card payment",note:""},
+      {id:uid(),ex:1,name:"Borrowed from a friend",kind:"Owed to a person",owed:250,start:250,apr:0,pay:50,due:28,method:"Bank transfer",note:""},
+      {id:uid(),ex:1,name:"Energy arrears",kind:"Bill or arrears",owed:120,start:120,apr:0,pay:30,due:5,method:"Direct debit",note:""}
+    ]};
+  }
+  function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+  function money(n){n=+n||0;var whole=Math.abs(n-Math.round(n))<0.005;return new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP",minimumFractionDigits:whole?0:2,maximumFractionDigits:whole?0:2}).format(n)}
+  function monthLabel(m){var d=new Date();d=new Date(d.getFullYear(),d.getMonth()+m,1);return d.toLocaleDateString("en-GB",{month:"short",year:"numeric"})}
+
+  /* ---------- projection ---------- */
+  function sim(debts,extra,strategy,roll){
+    var d=debts.filter(function(x){return x.owed>0}).map(function(x){return {id:x.id,bal:+x.owed,apr:+x.apr||0,pay:+x.pay||0,done:null}});
+    var planned=d.reduce(function(a,x){return a+x.pay},0);
+    var total=function(){return d.reduce(function(a,x){return a+x.bal},0)};
+    var series=[total()],interest=0,m=0;
+    while(m<600&&d.some(function(x){return x.bal>0.005})){
+      m++;
+      d.forEach(function(x){if(x.bal>0.005){var i=x.bal*x.apr/1200;x.bal+=i;interest+=i}});
+      var paidOwn=0;
+      d.forEach(function(x){if(x.bal>0.005){var p=Math.min(x.pay,x.bal);x.bal-=p;paidOwn+=p}});
+      var rem=(roll?planned-paidOwn:0)+extra;
+      d.filter(function(x){return x.bal>0.005}).sort(function(a,b){
+        return strategy==="snowball"?a.bal-b.bal:(b.apr-a.apr)||(a.bal-b.bal);
+      }).forEach(function(x){var p=Math.min(rem,x.bal);x.bal-=p;rem-=p});
+      d.forEach(function(x){if(x.bal<=0.005&&x.done==null){x.done=m;x.bal=0}});
+      series.push(total());
+    }
+    var ok=!d.some(function(x){return x.bal>0.005});
+    var done={};d.forEach(function(x){done[x.id]=x.done});
+    return {ok:ok,months:m,interest:interest,series:series,done:done};
+  }
+  function extraMonthly(){var s=state.settings;return (+s.hours||0)*(+s.rate||0)*52/12}
+
+  /* ---------- storage ---------- */
+  function setStatus(t){$("status").textContent=t}
+  function saveLocal(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
+  function loadLocal(){try{var r=localStorage.getItem(KEY);return r?JSON.parse(r):null}catch(e){return null}}
+  function changed(){
+    saveLocal();
+    if(!dbDoc){setStatus("Saved on this device");return}
+    setStatus("Saving...");
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(flush,500);
+  }
+  function flush(){
+    if(!dbDoc)return;
+    if(dbBusy){dbDirty=true;return}
+    dbBusy=true;dbDirty=false;
+    dbDoc.set(JSON.parse(JSON.stringify(state))).then(function(){
+      dbBusy=false;
+      if(dbDirty)flush();else setStatus("Saved");
+    }).catch(function(){dbBusy=false;setStatus("Saved on this device only")});
+  }
+  function connectDb(){
+    if(!window.claude||!window.claude.use)return;
+    Promise.all([window.claude.use("db"),window.claude.use("user")]).then(function(r){
+      var db=r[0],user=r[1];
+      if(!db||!user||!user.id)return null;
+      return user.id().then(function(id){
+        if(!id)return null;
+        var doc=db.doc("data/users/"+id+"/tracker");
+        return doc.get().then(function(snap){
+          dbDoc=doc;
+          if(snap.exists){
+            var s=snap.data();
+            if(s&&Array.isArray(s.debts)){state=s;ui={editing:null,logging:null,arming:null};syncControls();render();saveLocal()}
+            setStatus("Saved");
+          }else{
+            if(!state.debts.some(function(x){return x.ex}))flush();
+            setStatus(state.debts.some(function(x){return x.ex})?"":"Saved");
+          }
+        });
+      });
+    }).catch(function(){});
+  }
+
+  /* ---------- render ---------- */
+  function nextDue(day){
+    if(!day)return null;
+    var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate());
+    var y=t.getFullYear(),m=t.getMonth();
+    function mk(yy,mm){var last=new Date(yy,mm+1,0).getDate();return new Date(yy,mm,Math.min(day,last))}
+    var d=mk(y,m);if(d<t)d=mk(y,m+1);
+    return {date:d,days:Math.round((d-t)/86400000)};
+  }
+  function dueChip(day){
+    var nd=nextDue(day);if(!nd)return "";
+    var txt=nd.days===0?"Due today":nd.days===1?"Due tomorrow":"Due in "+nd.days+" days";
+    var cls=nd.days<=3?"bad":nd.days<=7?"warn":"";
+    return '<span class="chip '+cls+'">'+txt+' · '+nd.date.toLocaleDateString("en-GB",{day:"numeric",month:"short"})+'</span>';
+  }
+
+  function render(){
+    var s=state.settings,debts=state.debts;
+    var extra=extraMonthly();
+    var plan=sim(debts,extra,s.strategy,s.roll);
+    var base=sim(debts,0,s.strategy,s.roll);
+    var totalOwed=debts.reduce(function(a,x){return a+(+x.owed||0)},0);
+    var monthly=debts.filter(function(x){return x.owed>0}).reduce(function(a,x){return a+(+x.pay||0)},0);
+
+    $("summary").innerHTML=
+      '<div><div class="label">Total owed</div><div class="big">'+money(totalOwed)+'</div><div class="sub">'+debts.length+' item'+(debts.length===1?"":"s")+'</div></div>'+
+      '<div><div class="label">Paying each month</div><div class="big">'+money(monthly)+'</div><div class="sub">'+(extra>0?"plus "+money(extra)+" from extra hours":"before extra hours")+'</div></div>'+
+      '<div><div class="label">Debt free</div><div class="big">'+(totalOwed<=0?"Now":plan.ok?monthLabel(plan.months):"Not yet")+'</div><div class="sub">'+(totalOwed<=0?"Nothing owed":plan.ok?plan.months+" month"+(plan.months===1?"":"s")+" to go":"Payments do not cover interest")+'</div></div>'+
+      '<div><div class="label">Interest to pay</div><div class="big">'+(plan.ok?money(plan.interest):"-")+'</div><div class="sub">on this plan</div></div>';
+
+    var hasEx=debts.some(function(x){return x.ex});
+    $("banner").innerHTML=hasEx?'<div class="banner"><span>These are example debts so you can see how it works. Remove them and add your own.</span><button class="btn small" type="button" data-act="clear-ex">Remove examples</button></div>':"";
+
+    renderDebts(plan);
+    renderPlan(plan,base,extra);
+  }
+
+  function renderDebts(plan){
+    var s=state.settings,debts=state.debts;
+    if(!debts.length){$("debts").innerHTML='<div class="empty"><strong>Nothing added yet.</strong><br>Press "Add a debt or bill" to start. Include who you owe, how much, and what you can pay each month.</div>';return}
+    var order=debts.slice().sort(function(a,b){
+      var an=nextDue(a.due),bn=nextDue(b.due);
+      return (a.owed>0?0:1)-(b.owed>0?0:1)||(an&&bn?an.days-bn.days:an?-1:bn?1:0);
+    });
+    $("debts").innerHTML=order.map(function(x){
+      var start=Math.max(+x.start||0,+x.owed||0),pct=start>0?Math.round((1-x.owed/start)*100):0;
+      var paidOff=x.owed<=0;
+      var clears=plan.done[x.id];
+      var hrs=(+s.rate>0&&x.owed>0)?Math.ceil(x.owed/s.rate):null;
+      var logging=ui.logging===x.id;
+      return '<article class="debt" data-id="'+x.id+'">'+
+        '<div class="debt-top"><div><div class="debt-name">'+esc(x.name)+'</div><div class="chips"><span class="chip">'+esc(x.kind)+'</span>'+(x.ex?'<span class="chip ex">Example</span>':"")+(paidOff?'<span class="chip">Paid off</span>':dueChip(x.due))+'</div></div>'+
+        '<div class="owed">'+money(x.owed)+'</div></div>'+
+        '<div class="bar" aria-hidden="true"><i style="width:'+Math.max(0,Math.min(100,pct))+'%"></i></div>'+
+        '<dl class="facts">'+
+          '<div><dt>I will pay</dt><dd class="num">'+money(x.pay)+' / month</dd></div>'+
+          '<div><dt>How</dt><dd>'+esc(x.method||"Not set")+'</dd></div>'+
+          (+x.apr>0?'<div><dt>Interest</dt><dd class="num">'+(+x.apr)+'% APR</dd></div>':"")+
+          (!paidOff&&clears?'<div><dt>Cleared by</dt><dd>'+monthLabel(clears)+'</dd></div>':"")+
+          (hrs?'<div><dt>Hours of work</dt><dd class="num">'+hrs+' hrs to clear</dd></div>':"")+
+          (x.note?'<div><dt>Note</dt><dd>'+esc(x.note)+'</dd></div>':"")+
+        '</dl>'+
+        (logging?'<div class="logbox"><label for="log-amt" class="label">Amount paid (£)</label><input type="number" id="log-amt" min="0" step="0.01" inputmode="decimal" style="width:120px" value="'+(+x.pay||"")+'"><button class="btn primary small" type="button" data-act="log-ok">Record</button><button class="btn small" type="button" data-act="log-cancel">Cancel</button></div>':"")+
+        '<div class="row-actions">'+
+          (!paidOff&&!logging?'<button class="btn small" type="button" data-act="log">Log a payment</button>':"")+
+          '<button class="btn small" type="button" data-act="edit">Edit</button>'+
+          '<button class="btn small danger'+(ui.arming===x.id?" armed":"")+'" type="button" data-act="del">'+(ui.arming===x.id?"Confirm delete":"Delete")+'</button>'+
+        '</div></article>';
+    }).join("");
+  }
+
+  function renderPlan(plan,base,extra){
+    var s=state.settings;
+    $("hours-out").textContent=(+s.hours||0);
+    var r=$("result");
+    if(!state.debts.some(function(x){return x.owed>0})){r.innerHTML="Add a debt to see your plan.";}
+    else if(!plan.ok){r.innerHTML="<strong>These payments do not clear the debts.</strong><span>Interest is growing faster than you pay. Raise a monthly payment or add extra hours.</span>"}
+    else if(extra>0&&base.ok){
+      var saveM=base.months-plan.months,saveI=base.interest-plan.interest;
+      r.innerHTML='<span><strong>'+(+s.hours)+' extra hrs/week</strong> adds about <strong>'+money(extra)+'</strong> a month.</span>'+
+        '<span>You are debt free <strong>'+saveM+' month'+(saveM===1?"":"s")+'</strong> sooner ('+monthLabel(plan.months)+') and pay <strong>'+money(Math.max(0,saveI))+'</strong> less interest.</span>';
+    }else if(extra>0){
+      r.innerHTML='<span><strong>'+(+s.hours)+' extra hrs/week</strong> adds about <strong>'+money(extra)+'</strong> a month and clears everything by <strong>'+monthLabel(plan.months)+'</strong>.</span>';
+    }else{
+      r.innerHTML='<span>Without extra hours you are debt free in <strong>'+monthLabel(plan.months)+'</strong> ('+plan.months+' months).</span><span>Move the slider to see what extra shifts would change.</span>';
+    }
+    drawChart(plan,base,extra);
+    // target
+    var t=+s.target,out="";
+    if(t>0&&state.debts.some(function(x){return x.owed>0})){
+      if(!(+s.rate>0)){out="Enter your pay per hour to work out the hours."}
+      else{
+        var found=null;
+        for(var h=0;h<=80;h+=0.5){var p=sim(state.debts,h*s.rate*52/12,s.strategy,s.roll);if(p.ok&&p.months<=t){found=h;break}}
+        out=found==null?"Even 80 extra hours a week would not clear it in "+t+" months.":found===0?"Your current payments already clear everything within "+t+" months.":"To be debt free within "+t+" months you need about "+found+" extra hours a week ("+money(found*s.rate*52/12)+" a month).";
+      }
+    }
+    $("target-out").textContent=out;
+  }
+
+  function drawChart(plan,base,extra){
+    var W=600,H=230,L=56,R=12,T=14,B=28,svg=$("chart");
+    var showBase=extra>0&&base.ok;
+    var a=plan.series,b=showBase?base.series:[];
+    var n=Math.max(a.length,b.length)-1;if(n<1)n=1;
+    var max=Math.max.apply(null,a.concat(b,[1]));
+    var X=function(i){return L+(W-L-R)*i/n},Y=function(v){return T+(H-T-B)*(1-v/max)};
+    function path(arr){return arr.map(function(v,i){return (i?"L":"M")+X(i).toFixed(1)+" "+Y(v).toFixed(1)}).join(" ")}
+    var g="";
+    [0,.5,1].forEach(function(f){var v=max*f,y=Y(v);g+='<line class="grid" x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'"/><text x="'+(L-6)+'" y="'+(y+4)+'" text-anchor="end">'+money(Math.round(v))+'</text>'});
+    var out=g;
+    if(a.length>1){
+      out+='<path class="area" d="'+path(a)+' L'+X(a.length-1).toFixed(1)+' '+Y(0)+' L'+X(0)+' '+Y(0)+' Z" opacity=".55"/>';
+    }
+    if(showBase)out+='<path class="base" d="'+path(b)+'"/>';
+    out+='<path class="plan" d="'+path(a)+'"/>';
+    out+='<text x="'+L+'" y="'+(H-8)+'" text-anchor="start">Now</text>';
+    out+='<text x="'+(W-R)+'" y="'+(H-8)+'" text-anchor="end">'+monthLabel(n)+'</text>';
+    if(n>=4)out+='<text x="'+X(n/2).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle">'+monthLabel(Math.round(n/2))+'</text>';
+    svg.innerHTML=out;
+    $("legend").innerHTML=showBase?'<span>With extra hours</span><span class="b">Without</span>':'<span>Total owed</span>';
+  }
+
+  /* ---------- actions ---------- */
+  function openForm(x){
+    ui.editing=x?x.id:null;
+    var f=$("form");f.hidden=false;
+    $("f-name").value=x?x.name:"";$("f-kind").value=x?x.kind:"Credit card";
+    $("f-owed").value=x?x.owed:"";$("f-pay").value=x?x.pay:"";$("f-due").value=x&&x.due?x.due:"";
+    $("f-method").value=x?x.method||"":"";$("f-apr").value=x&&x.apr?x.apr:"";$("f-start").value=x&&x.start?x.start:"";$("f-note").value=x?x.note||"":"";
+    $("f-save").textContent=x?"Save changes":"Add debt";
+    f.scrollIntoView({block:"nearest"});$("f-name").focus();
+  }
+  function closeForm(){$("form").hidden=true;ui.editing=null}
+  function find(id){return state.debts.filter(function(x){return x.id===id})[0]}
+
+  $("add-btn").addEventListener("click",function(){openForm(null)});
+  $("f-cancel").addEventListener("click",closeForm);
+  $("form").addEventListener("submit",function(e){
+    e.preventDefault();
+    var rec={name:$("f-name").value.trim(),kind:$("f-kind").value,owed:Math.max(0,+$("f-owed").value||0),pay:Math.max(0,+$("f-pay").value||0),
+      due:Math.min(31,Math.max(0,Math.round(+$("f-due").value||0))),method:$("f-method").value.trim(),apr:Math.max(0,+$("f-apr").value||0),
+      start:Math.max(0,+$("f-start").value||0),note:$("f-note").value.trim()};
+    if(!rec.name)return;
+    if(ui.editing){var x=find(ui.editing);if(x){Object.keys(rec).forEach(function(k){x[k]=rec[k]});delete x.ex}}
+    else{rec.id=uid();if(!rec.start||rec.start<rec.owed)rec.start=rec.owed;state.debts.push(rec)}
+    closeForm();changed();render();
+  });
+  document.addEventListener("click",function(e){
+    var b=e.target.closest("[data-act]");if(!b)return;
+    var act=b.getAttribute("data-act"),card=b.closest("[data-id]"),id=card?card.getAttribute("data-id"):null,x=id?find(id):null;
+    if(act==="edit"&&x){openForm(x)}
+    else if(act==="del"&&x){
+      if(ui.arming===id){state.debts=state.debts.filter(function(d){return d.id!==id});ui.arming=null;changed()}
+      else ui.arming=id;
+      render();
+    }
+    else if(act==="log"&&x){ui.logging=id;ui.arming=null;render();var i=$("log-amt");if(i){i.focus();i.select()}}
+    else if(act==="log-cancel"){ui.logging=null;render()}
+    else if(act==="log-ok"&&x){
+      var amt=Math.max(0,+$("log-amt").value||0);
+      x.owed=Math.max(0,Math.round((x.owed-amt)*100)/100);delete x.ex;ui.logging=null;changed();render();
+    }
+    else if(act==="clear-ex"){state.debts=state.debts.filter(function(d){return !d.ex});changed();render()}
+  });
+
+  function syncControls(){
+    var s=state.settings;
+    $("s-strategy").value=s.strategy;$("s-rate").value=s.rate;$("s-roll").checked=!!s.roll;$("s-hours").value=s.hours||0;$("s-target").value=s.target||"";
+  }
+  function planInput(){
+    var s=state.settings;
+    s.strategy=$("s-strategy").value;s.rate=Math.max(0,+$("s-rate").value||0);s.roll=$("s-roll").checked;
+    s.hours=+$("s-hours").value||0;s.target=$("s-target").value;
+    changed();render();
+  }
+  ["s-strategy","s-rate","s-roll","s-hours","s-target"].forEach(function(id){
+    $(id).addEventListener("input",planInput);$(id).addEventListener("change",planInput);
+  });
+
+  /* ---------- start ---------- */
+  var local=loadLocal();
+  state=(local&&Array.isArray(local.debts)&&local.settings)?local:sample();
+  syncControls();render();
+  setStatus(local?"Saved on this device":"");
+  connectDb();
+})();
+</script>
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(function(){})}</script>
+</body></html>
